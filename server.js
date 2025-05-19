@@ -1,33 +1,32 @@
 import express from "express";
 import bodyParser from "body-parser";
+import { startBot } from "./bot.js";
 import path from "path";
 import { fileURLToPath } from "url";
-import { startBot } from "./bot.js";
+
+const app = express();
+const PORT = process.env.PORT || 3000;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 app.post("/start", async (req, res) => {
   const number = req.body.number;
   if (!number || !number.startsWith("+")) {
-    return res.json({ error: "Invalid number format." });
+    return res.json({ error: "Enter full number with country code (e.g. +254...)" });
   }
 
   try {
-    await startBot(number, (qrImage) => {
-      res.json({ qr: qrImage });
+    await startBot(number, (code) => {
+      res.json({ code });
     });
   } catch (e) {
     console.error(e);
-    res.json({ error: "Bot failed to start." });
+    res.json({ error: "Failed to start bot" });
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`BERA TECH BOT running on http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log("Server running on port", PORT));
