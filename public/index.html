@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BERA TECH BOT</title>
+  <style>
+    body { font-family: sans-serif; background: #111; color: #0f0; text-align: center; padding: 50px; }
+    input { padding: 10px; font-size: 18px; }
+    button { padding: 10px 20px; font-size: 18px; margin-left: 10px; }
+    #qr { margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>BERA TECH BOT</h1>
+  <p>Enter your WhatsApp number with country code (e.g., +254712345678)</p>
+  <input id="number" placeholder="+254712345678" />
+  <button onclick="pair()">Pair</button>
+  <div id="qr"></div>
+
+  <script>
+    async function pair() {
+      const number = document.getElementById('number').value;
+      const res = await fetch('/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number })
+      });
+      const data = await res.json();
+      if (data.qr) {
+        document.getElementById('qr').innerHTML = `<img src="${data.qr}" />`;
+      } else {
+        alert('Error: ' + data.error);
+      }
+    }
+  </script>
+</body>
+</html>
