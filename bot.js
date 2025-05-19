@@ -1,74 +1,54 @@
-import makeWASocket, {
+import baileys from "@whiskeysockets/baileys";
+import Pino from "pino";
+import fs from "fs";
+import path from "path";
+
+const {
+  makeWASocket,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
-  DisconnectReason
-} from "@whiskeysockets/baileys";
-import P from "pino";
-import fs from "fs";
-import qrcode from "qrcode";
+  usePairingCode
+} = baileys;
 
-const { state, saveCreds } = await useMultiFileAuthState('./auth');
-let sock = null;
+const EMOJIS = ["❤️", "🔥", "🌝", "😂", "👍", "😎", "👏", "🙌"];
 
-const getRandomEmoji = () => {
-  const emojis = ['❤️', '🔥', '🌝', '😎', '🤯', '🎉', '🌟', '💯', '🙌'];
-  return emojis[Math.floor(Math.random() * emojis.length)];
-};
-
-export async function startBot(number, sendQR) {
+export async function startBot(number, sendCode) {
+  const { state, saveCreds } = await useMultiFileAuthState("auth");
   const { version } = await fetchLatestBaileysVersion();
 
-  sock = makeWASocket({
+  const sock = makeWASocket({
     version,
-    logger: P({ level: "silent" }),
+    logger: Pino({ level: "silent" }),
     auth: state,
-    browser: ['BERA TECH', 'Chrome', '1.0'],
-    printQRInTerminal: false
+    browser: ["Bera Tech", "Chrome", "1.0"]
   });
 
-  sock.ev.on('creds.update', saveCreds);
+  if (!sock.authState.creds.registered) {
+    const code = await usePairingCode(sock, number);
+    sendCode(code);
+  }
 
-  sock.ev.on('connection.update', async (update) => {
-    const { connection, qr, lastDisconnect } = update;
-
-    if (qr) {
-      const qrImage = await qrcode.toDataURL(qr);
-      sendQR(qrImage);
-    }
-
-    if (connection === 'open') {
-      const jid = sock.user.id;
-      console.log("✅ Connected as:", jid);
+  sock.ev.on("connection.update", async (update) => {
+    const { connection } = update;
+    if (connection === "open") {
+      const jid = sock.user.id.split(":")[0] + "@s.whatsapp.net";
       await sock.sendMessage(jid, { text: "BERA TECH BOT Connection established" });
-    }
 
-    if (connection === 'close') {
-      const code = new Boom(lastDisconnect?.error)?.output?.statusCode;
-      if (code !== DisconnectReason.loggedOut) {
-        console.log("Reconnecting...");
-        startBot(number, sendQR);
-      }
-    }
-  });
-
-  // Auto-view and react to statuses
-  sock.ev.on('messages.upsert', async ({ messages }) => {
-    for (const msg of messages) {
-      if (!msg.message || msg.key.fromMe) continue;
-      if (msg.key.remoteJid === 'status@broadcast') {
-        try {
-          await sock.readMessages([msg.key]);
-          await sock.sendMessage(msg.key.remoteJid, {
-            react: {
-              text: getRandomEmoji(),
-              key: msg.key
+      // Start reacting to statuses
+      sock.ev.on("messages.upsert", async ({ messages }) => {
+        for (let msg of messages) {
+          if (msg.key.remoteJid?.endsWith("@status")) {
+            const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+            try {
+              await sock.sendReaction(msg.key.remoteJid, emoji, msg.key.id);
+            } catch (e) {
+              console.error("Reaction failed:", e);
             }
-          });
-          console.log("Reacted to status:", msg.key.participant);
-        } catch (e) {
-          console.log("Status reaction failed:", e.message);
+          }
         }
-      }
+      });
     }
   });
+
+  sock.ev.on("creds.update", saveCreds);
 }
