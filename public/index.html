@@ -1,35 +1,30 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>BERA TECH BOT</title>
-  <style>
-    body { font-family: sans-serif; background: #111; color: #0f0; text-align: center; padding: 50px; }
-    input { padding: 10px; font-size: 18px; }
-    button { padding: 10px 20px; font-size: 18px; margin-left: 10px; }
-    #qr { margin-top: 20px; }
-  </style>
+  <title>BERA TECH Pair</title>
 </head>
 <body>
-  <h1>BERA TECH BOT</h1>
-  <p>Enter your WhatsApp number with country code (e.g., +254712345678)</p>
-  <input id="number" placeholder="+254712345678" />
-  <button onclick="pair()">Pair</button>
-  <div id="qr"></div>
+  <h2>Connect BERA TECH BOT</h2>
+  <input type="text" id="number" placeholder="+1234567890" />
+  <button onclick="startPair()">Pair</button>
+  <div id="pairCode" style="margin-top: 20px;"></div>
 
   <script>
-    async function pair() {
-      const number = document.getElementById('number').value;
-      const res = await fetch('/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+    async function startPair() {
+      const number = document.getElementById("number").value;
+      const res = await fetch("/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ number })
       });
       const data = await res.json();
-      if (data.qr) {
-        document.getElementById('qr').innerHTML = `<img src="${data.qr}" />`;
+      if (data.code) {
+        document.getElementById("pairCode").innerHTML = `
+          <b>Pairing Code:</b> ${data.code}<br/>
+          <small>Paste this in WhatsApp → Linked Devices → Link a Device</small>
+        `;
       } else {
-        alert('Error: ' + data.error);
+        alert(data.error || "Something went wrong");
       }
     }
   </script>
