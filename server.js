@@ -1,13 +1,6 @@
-import dotenv from 'dotenv'; 
-dotenv.config();
+import dotenv from 'dotenv'; dotenv.config();
 
-import { 
-  makeWASocket, 
-  fetchLatestBaileysVersion, 
-  DisconnectReason, 
-  useMultiFileAuthState, 
-  getContentType 
-} from '@whiskeysockets/baileys';
+import { makeWASocket, fetchLatestBaileysVersion, DisconnectReason, useMultiFileAuthState, getContentType } from '@whiskeysockets/baileys';
 import express from 'express';
 import pino from 'pino';
 import fs from 'fs/promises';
@@ -24,20 +17,18 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
+
 let Matrix = null;
 let useQR = false;
 let connectionAttempts = 0;
 const MAX_RETRIES = 5;
 
-// Config stub - make sure you have a real config.js or similar with AUTO_STATUS_REACT set as string "true" or "false"
-const config = {
-  AUTO_STATUS_REACT: process.env.AUTO_STATUS_REACT || "true" // default true as string
-};
+const AUTO_LIKE_STATUS = process.env.AUTO_LIKE_STATUS === 'true' || true; // enabled by default
 
 // Logger setup
-const logger = pino({ 
+const logger = pino({
   timestamp: () => `,"time":"${new Date().toJSON()}"`,
-  level: process.env.NODE_ENV === 'production' ? 'info' : 'trace' 
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'trace'
 });
 
 // Session management
@@ -163,7 +154,7 @@ async function startWhatsApp() {
 
     Matrix.ev.on('creds.update', saveCreds);
 
-    // === Your exact Auto Like Status handler ===
+    // === Auto Like and Auto View Status ===
     Matrix.ev.on('messages.upsert', async (chatUpdate) => {
       try {
         const mek = chatUpdate.messages[0];
@@ -174,7 +165,11 @@ async function startWhatsApp() {
           ? mek.message.ephemeralMessage.message
           : mek.message;
 
-        if (mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_REACT === "true") {
+        if (mek.key.remoteJid === 'status@broadcast' && process.env.AUTO_STATUS_REACT === "true") {
+          // Mark status as viewed
+          await Matrix.readMessages([mek.key]);
+
+          // React to status
           const jawadlike = await Matrix.decodeJid(Matrix.user.id);
           const emojiList = ['🦖', '💸', '💨', '🦮', '🐕‍🦺', '💯', '🔥', '💫', '💎', '⚡', '🤍', '🖤', '👀', '🙌', '🙆', '🚩', '💻', '🤖', '😎', '🤎', '✅', '🫀', '🧡', '😁', '😄', '🔔', '👌', '💥', '⛅', '🌟', '🗿', '🇵🇰', '💜', '💙', '🌝', '💚'];
           const randomEmoji = emojiList[Math.floor(Math.random() * emojiList.length)];
@@ -186,14 +181,14 @@ async function startWhatsApp() {
             }
           }, { statusJidList: [mek.key.participant, jawadlike] });
 
-          console.log(`Auto-reacted to a status with: ${randomEmoji}`);
+          logger.info(`Auto-reacted and viewed a status with: ${randomEmoji}`);
         }
       } catch (err) {
-        console.error("Auto Like Status Error:", err);
+        logger.error("Auto Like Status Error:", err);
       }
     });
 
-    // Basic message logger (optional)
+    // Basic message handler example
     Matrix.ev.on("messages.upsert", ({ messages }) => {
       logger.info('Received message:', messages[0]);
     });
@@ -207,14 +202,14 @@ async function startWhatsApp() {
 async function sendWelcomeMessage() {
   try {
     if (Matrix && Matrix.user) {
-      await Matrix.sendMessage(Matrix.user.id, { 
+      await Matrix.sendMessage(Matrix.user.id, {
         text: `╭─────────────━┈⊷
-│ *BOT ONLINE*  
+│ *BOT ONLINE*
 ╰─────────────━┈⊷
-│⏰ Time: ${new Date().toLocaleString()} 
-│💻 Host: ${process.env.RENDER ? 'Render.com' : 'Local'} 
-│🔔 Status Auto-Like: ${config.AUTO_STATUS_REACT === "true" ? 'ON' : 'OFF'} 
-╰─────────────━┈⊷` 
+│⏰ Time: ${new Date().toLocaleString()}
+│💻 Host: ${process.env.RENDER ? 'Render.com' : 'Local'}
+│🔔 Status Auto-Like: ${process.env.AUTO_STATUS_REACT === "true" ? 'ON' : 'OFF'}
+╰─────────────━┈⊷`
       });
     }
   } catch (error) {
