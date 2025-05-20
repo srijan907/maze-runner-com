@@ -1,0 +1,26 @@
+// data/groupHandler.js
+export default async function GroupUpdate(Matrix, message) {
+    try {
+        const { id, participants, action } = message;
+        const groupMetadata = await Matrix.groupMetadata(id);
+        const groupName = groupMetadata.subject || "Group";
+        const participantList = participants.map(p => p.split('@')[0]);
+
+        console.log(`Group Update in ${groupName}:`);
+        console.log(`Action: ${action}`);
+        console.log(`Participants: ${participantList.join(', ')}`);
+
+        // Example: Send welcome message for new participants
+        if (action === 'add') {
+            const text = `Welcome ${participantList.map(p => `@${p}`).join(', ')} to ${groupName}!`;
+            await Matrix.sendMessage(id, { text, mentions: participants });
+        }
+        // Example: Send goodbye message for removed participants
+        else if (action === 'remove') {
+            const text = `Goodbye ${participantList.map(p => `@${p}`).join(', ')} from ${groupName}!`;
+            await Matrix.sendMessage(id, { text, mentions: participants });
+        }
+    } catch (error) {
+        console.error('Error handling group update:', error);
+    }
+}
