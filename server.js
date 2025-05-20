@@ -10,13 +10,17 @@ import {
 } from '@whiskeysockets/baileys';
 import express from 'express';
 import pino from 'pino';
-import fs from 'fs';
+import fs from 'fs/promises';
 import { File } from 'megajs';
 import NodeCache from 'node-cache';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import chalk from 'chalk';
 import http from 'http';
-import { Handler, Callupdate, GroupUpdate } from './data/index.js';
+
+// Fix for __dirname in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Configuration
 const prefix = process.env.PREFIX || '!';
@@ -36,12 +40,16 @@ const logger = pino({
 });
 
 // Session management
-const __dirname = path.dirname(new URL(import.meta.url).pathname;
 const sessionDir = path.join(__dirname, 'session');
 const credsPath = path.join(sessionDir, 'creds.json');
 
-if (!fs.existsSync(sessionDir)) {
-    fs.mkdirSync(sessionDir, { recursive: true });
+// Ensure session directory exists
+async function ensureSessionDir() {
+    try {
+        await fs.access(sessionDir);
+    } catch {
+        await fs.mkdir(sessionDir, { recursive: true });
+    }
 }
 
 // Health check endpoint
@@ -61,7 +69,12 @@ async function downloadSessionData() {
     }
 
     try {
-        const [fileID, decryptKey] = process.env.SESSION_ID.split("CLOUD-AI~")[1].split("#");
+        const sessionData = process.env.SESSION_ID.split("CLOUD-AI~")[1];
+        if (!sessionData || !sessionData.includes("#")) {
+            throw new Error('Invalid SESSION_ID format');
+        }
+
+        const [fileID, decryptKey] = sessionData.split("#");
         const file = File.fromURL(`https://mega.nz/file/${fileID}#${decryptKey}`);
         
         const data = await new Promise((resolve, reject) => {
@@ -70,7 +83,7 @@ async function downloadSessionData() {
             });
         });
 
-        await fs.promises.writeFile(credsPath, data);
+        await fs.writeFile(credsPath, data);
         logger.info('Session downloaded successfully');
         return true;
     } catch (error) {
@@ -82,6 +95,7 @@ async function downloadSessionData() {
 // WhatsApp connection handler
 async function startWhatsApp() {
     try {
+        await ensureSessionDir();
         const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
         const { version } = await fetchLatestBaileysVersion();
 
@@ -119,9 +133,18 @@ async function startWhatsApp() {
         });
 
         Matrix.ev.on('creds.update', saveCreds);
-        Matrix.ev.on("messages.upsert", Handler);
-        Matrix.ev.on("call", Callupdate);
-        Matrix.ev.on("group-participants.update", GroupUpdate);
+        Matrix.ev.on("messages.upsert", (chatUpdate) => {
+            // Basic message handler
+            console.log('Received message:', chatUpdate.messages[0]);
+        });
+        Matrix.ev.on("call", (json) => {
+            // Basic call handler
+            console.log('Call received:', json);
+        });
+        Matrix.ev.on("group-participants.update", (update) => {
+            // Basic group update handler
+            console.log('Group update:', update);
+        });
 
     } catch (error) {
         logger.error('Connection error:', error);
@@ -131,14 +154,16 @@ async function startWhatsApp() {
 
 async function sendWelcomeMessage() {
     try {
-        await Matrix.sendMessage(Matrix.user.id, {
-            text: `╭─────────────━┈⊷
+        if (Matrix && Matrix.user) {
+            await Matrix.sendMessage(Matrix.user.id, {
+                text: `╭─────────────━┈⊷
 │ *BOT ONLINE* 
 ╰─────────────━┈⊷
 │⏰ Time: ${new Date().toLocaleString()}
 │💻 Host: ${process.env.RENDER ? 'Render.com' : 'Local'}
 ╰─────────────━┈⊷`
-        });
+            });
+        }
     } catch (error) {
         logger.error('Welcome message error:', error);
     }
@@ -146,40 +171,46 @@ async function sendWelcomeMessage() {
 
 // Initialize everything
 async function initialize() {
-    // Start HTTP server first
-    server.listen(PORT, () => {
-        logger.info(`Server running on port ${PORT}`);
-    });
+    try {
+        // Start HTTP server first
+        server.listen(PORT, () => {
+            logger.info(`Server running on port ${PORT}`);
+        });
 
-    // Then start WhatsApp connection
-    if (fs.existsSync(credsPath)) {
-        logger.info('Existing session found');
-        await startWhatsApp();
-    } else if (process.env.SESSION_ID) {
-        logger.info('Downloading session...');
-        const success = await downloadSessionData();
-        if (success) await startWhatsApp();
-    } else {
-        useQR = true;
-        await startWhatsApp();
-    }
-
-    // Keep-alive ping
-    setInterval(() => {
-        if (Matrix && Matrix.user) {
-            logger.debug('Keep-alive check: Connected');
-        } else {
-            logger.warn('Keep-alive check: Disconnected, attempting reconnect');
-            startWhatsApp();
+        // Then start WhatsApp connection
+        try {
+            await fs.access(credsPath);
+            logger.info('Existing session found');
+            await startWhatsApp();
+        } catch {
+            if (process.env.SESSION_ID) {
+                logger.info('Downloading session...');
+                const success = await downloadSessionData();
+                if (success) await startWhatsApp();
+            } else {
+                useQR = true;
+                await startWhatsApp();
+            }
         }
-    }, 60000); // Check every minute
+
+        // Keep-alive ping
+        setInterval(() => {
+            if (Matrix && Matrix.user) {
+                logger.debug('Keep-alive check: Connected');
+            } else {
+                logger.warn('Keep-alive check: Disconnected, attempting reconnect');
+                startWhatsApp();
+            }
+        }, 60000); // Check every minute
+
+    } catch (error) {
+        logger.error('Initialization failed:', error);
+        process.exit(1);
+    }
 }
 
 // Start the application
-initialize().catch(error => {
-    logger.error('Initialization failed:', error);
-    process.exit(1);
-});
+initialize();
 
 // Clean exit handler
 process.on('SIGINT', () => {
