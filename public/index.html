@@ -1,30 +1,86 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>BERA TECH Pair</title>
+  <meta charset="UTF-8">
+  <title>Core AI - Deploy Session</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 50px;
+    }
+    .container {
+      background: #1e1e1e;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px #333;
+      width: 90%;
+      max-width: 500px;
+    }
+    input, button {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    input {
+      background: #222;
+      color: #fff;
+    }
+    button {
+      background: #28a745;
+      color: white;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #666;
+    }
+    #log {
+      margin-top: 15px;
+      font-size: 14px;
+      color: lime;
+      white-space: pre-wrap;
+    }
+  </style>
 </head>
 <body>
-  <h2>Connect BERA TECH BOT</h2>
-  <input type="text" id="number" placeholder="+1234567890" />
-  <button onclick="startPair()">Pair</button>
-  <div id="pairCode" style="margin-top: 20px;"></div>
+  <div class="container">
+    <h2>Deploy Core AI WhatsApp Bot</h2>
+    <label for="session">Enter SESSION_ID (CLOUD-AI~...):</label>
+    <input type="text" id="session" placeholder="CLOUD-AI~FILEID#KEY">
+    <button onclick="deploy()">Deploy & Start Bot</button>
+    <div id="log"></div>
+  </div>
 
   <script>
-    async function startPair() {
-      const number = document.getElementById("number").value;
-      const res = await fetch("/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ number })
-      });
-      const data = await res.json();
-      if (data.code) {
-        document.getElementById("pairCode").innerHTML = `
-          <b>Pairing Code:</b> ${data.code}<br/>
-          <small>Paste this in WhatsApp → Linked Devices → Link a Device</small>
-        `;
-      } else {
-        alert(data.error || "Something went wrong");
+    async function deploy() {
+      const sessionID = document.getElementById('session').value.trim();
+      const log = document.getElementById('log');
+
+      if (!sessionID.startsWith('CLOUD-AI~')) {
+        log.textContent = "Invalid SESSION_ID format. Must start with 'CLOUD-AI~'.";
+        return;
+      }
+
+      log.textContent = "Sending session ID to server...";
+
+      try {
+        const res = await fetch('/deploy-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session: sessionID })
+        });
+
+        const result = await res.text();
+        log.textContent = result;
+      } catch (err) {
+        log.textContent = "Error deploying session: " + err.message;
       }
     }
   </script>
