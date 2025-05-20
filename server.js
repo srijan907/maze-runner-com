@@ -3,7 +3,6 @@ dotenv.config();
 
 import {
     makeWASocket,
-    Browsers,
     fetchLatestBaileysVersion,
     DisconnectReason,
     useMultiFileAuthState,
@@ -16,34 +15,28 @@ import { File } from 'megajs';
 import NodeCache from 'node-cache';
 import path from 'path';
 import chalk from 'chalk';
-import moment from 'moment-timezone';
-import axios from 'axios';
-import config from './config.cjs';
+import http from 'http';
+import { Handler, Callupdate, GroupUpdate } from './data/index.js';
 
-const prefix = process.env.PREFIX || config.PREFIX;
+// Configuration
+const prefix = process.env.PREFIX || '!';
 const sessionName = "session";
 const app = express();
-const orange = chalk.bold.hex("#FFA500");
-const lime = chalk.bold.hex("#32CD32");
-let useQR = false;
-let initialConnection = true;
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
+let Matrix = null;
+let useQR = false;
+let connectionAttempts = 0;
+const MAX_RETRIES = 5;
 
-// Middleware
-app.use(express.json());
-app.use(express.static('public'));
-
-const MAIN_LOGGER = pino({
-    timestamp: () => `,"time":"${new Date().toJSON()}"`
+// Logger setup
+const logger = pino({
+    timestamp: () => `,"time":"${new Date().toJSON()}"`,
+    level: process.env.NODE_ENV === 'production' ? 'info' : 'trace'
 });
-const logger = MAIN_LOGGER.child({});
-logger.level = "trace";
 
-const msgRetryCounterCache = new NodeCache();
-
-const __filename = new URL(import.meta.url).pathname;
-const __dirname = path.dirname(__filename);
-
+// Session management
+const __dirname = path.dirname(new URL(import.meta.url).pathname;
 const sessionDir = path.join(__dirname, 'session');
 const credsPath = path.join(sessionDir, 'creds.json');
 
@@ -51,199 +44,146 @@ if (!fs.existsSync(sessionDir)) {
     fs.mkdirSync(sessionDir, { recursive: true });
 }
 
+// Health check endpoint
+app.get('/', (req, res) => {
+    res.status(200).json({
+        status: 'OK',
+        whatsapp: Matrix ? 'connected' : 'disconnected',
+        uptime: process.uptime()
+    });
+});
+
+// Session download function
 async function downloadSessionData() {
-    console.log("Debugging SESSION_ID:", config.SESSION_ID);
-
-    if (!config.SESSION_ID) {
-        console.error('Please add your session to SESSION_ID env !!');
+    if (!process.env.SESSION_ID) {
+        logger.error('SESSION_ID environment variable missing');
         return false;
     }
-
-    const sessdata = config.SESSION_ID.split("CLOUD-AI~")[1];
-
-    if (!sessdata || !sessdata.includes("#")) {
-        console.error('Invalid SESSION_ID format! It must contain both file ID and decryption key.');
-        return false;
-    }
-
-    const [fileID, decryptKey] = sessdata.split("#");
 
     try {
-        console.log("🔄 Downloading Session...");
+        const [fileID, decryptKey] = process.env.SESSION_ID.split("CLOUD-AI~")[1].split("#");
         const file = File.fromURL(`https://mega.nz/file/${fileID}#${decryptKey}`);
-
+        
         const data = await new Promise((resolve, reject) => {
             file.download((err, data) => {
-                if (err) reject(err);
-                else resolve(data);
+                err ? reject(err) : resolve(data);
             });
         });
 
         await fs.promises.writeFile(credsPath, data);
-        console.log("🔒 Session Successfully Loaded !!");
+        logger.info('Session downloaded successfully');
         return true;
     } catch (error) {
-        console.error('❌ Failed to download session data:', error);
+        logger.error('Session download failed:', error);
         return false;
     }
 }
 
-async function start() {
+// WhatsApp connection handler
+async function startWhatsApp() {
     try {
         const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-        const { version, isLatest } = await fetchLatestBaileysVersion();
-        console.log(`using WA v${version.join('.')}, isLatest: ${isLatest}`);
+        const { version } = await fetchLatestBaileysVersion();
 
-        const Matrix = makeWASocket({
+        Matrix = makeWASocket({
             version,
             logger: pino({ level: 'silent' }),
             printQRInTerminal: useQR,
-            browser: ["JOEL-MD", "safari", "3.3"],
             auth: state,
+            browser: ["Cloud-AI", "safari", "3.0"],
             getMessage: async (key) => {
-                if (store) {
-                    const msg = await store.loadMessage(key.remoteJid, key.id);
-                    return msg.message || undefined;
-                }
-                return { conversation: "whatsapp user bot" };
+                return { conversation: "WhatsApp Bot" };
             }
         });
 
-        Matrix.ev.on('connection.update', (update) => {
+        Matrix.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect } = update;
+            
             if (connection === 'close') {
-                if (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut) {
-                    start();
+                if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
+                    if (connectionAttempts < MAX_RETRIES) {
+                        connectionAttempts++;
+                        logger.info(`Reconnecting... (Attempt ${connectionAttempts}/${MAX_RETRIES})`);
+                        setTimeout(startWhatsApp, 5000);
+                    } else {
+                        logger.error('Max reconnection attempts reached');
+                    }
+                } else {
+                    logger.error('Connection closed. You are logged out.');
                 }
             } else if (connection === 'open') {
-                if (initialConnection) {
-                    console.log(chalk.green("Connected Successfull"));
-                    Matrix.sendMessage(Matrix.user.id, {
-                        image: { url: "https://files.catbox.moe/8h0cyi.jpg" },
-                        caption: `╭─────────────━┈⊷
-│ *CONNECTED SUCCESSFULLY *
-╰─────────────━┈⊷
-
-╭─────────────━┈⊷
-│BOT NAME : Cloud Ai
-│DEV : BRUCE BERA
-╰─────────────━┈⊷`
-                    });
-                    initialConnection = false;
-                } else {
-                    console.log(chalk.blue("♻️ Connection reestablished after restart."));
-                }
+                connectionAttempts = 0;
+                logger.info('Connected to WhatsApp');
+                await sendWelcomeMessage();
             }
         });
 
         Matrix.ev.on('creds.update', saveCreds);
-        Matrix.ev.on("messages.upsert", async chatUpdate => await Handler(chatUpdate, Matrix, logger));
-        Matrix.ev.on("call", async (json) => await Callupdate(json, Matrix));
-        Matrix.ev.on("group-participants.update", async (messag) => await GroupUpdate(Matrix, messag));
-
-        if (config.MODE === "public") {
-            Matrix.public = true;
-        } else if (config.MODE === "private") {
-            Matrix.public = false;
-        }
-
-        // Auto Reaction to chats
-        Matrix.ev.on('messages.upsert', async (chatUpdate) => {
-            try {
-                const mek = chatUpdate.messages[0];
-                if (!mek.key.fromMe && config.AUTO_REACT) {
-                    if (mek.message) {
-                        const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-                        await doReact(randomEmoji, mek, Matrix);
-                    }
-                }
-            } catch (err) {
-                console.error('Error during auto reaction:', err);
-            }
-        });
-
-        // Auto Like Status
-        Matrix.ev.on('messages.upsert', async (chatUpdate) => {
-            try {
-                const mek = chatUpdate.messages[0];
-                if (!mek || !mek.message) return;
-
-                const contentType = getContentType(mek.message);
-                mek.message = (contentType === 'ephemeralMessage')
-                    ? mek.message.ephemeralMessage.message
-                    : mek.message;
-
-                if (mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_REACT === "true") {
-                    const jawadlike = await Matrix.decodeJid(Matrix.user.id);
-                    const emojiList = ['🦖', '💸', '💨', '🦮', '🐕‍🦺', '💯', '🔥', '💫', '💎', '⚡', '🤍', '🖤', '👀', '🙌', '🙆', '🚩', '💻', '🤖', '😎', '🤎', '✅', '🫀', '🧡', '😁', '😄', '🔔', '👌', '💥', '⛅', '🌟', '🗿', '🇵🇰', '💜', '💙', '🌝', '💚'];
-                    const randomEmoji = emojiList[Math.floor(Math.random() * emojiList.length)];
-
-                    await Matrix.sendMessage(mek.key.remoteJid, {
-                        react: {
-                            text: randomEmoji,
-                            key: mek.key,
-                        }
-                    }, { statusJidList: [mek.key.participant, jawadlike] });
-
-                    console.log(`Auto-reacted to a status with: ${randomEmoji}`);
-                }
-            } catch (err) {
-                console.error("Auto Like Status Error:", err);
-            }
-        });
+        Matrix.ev.on("messages.upsert", Handler);
+        Matrix.ev.on("call", Callupdate);
+        Matrix.ev.on("group-participants.update", GroupUpdate);
 
     } catch (error) {
-        console.error('Critical Error:', error);
-        process.exit(1);
+        logger.error('Connection error:', error);
+        setTimeout(startWhatsApp, 10000);
     }
 }
 
-async function init() {
-    if (fs.existsSync(credsPath)) {
-        console.log("🔒 Session file found, proceeding without QR code.");
-        await start();
-    } else {
-        const sessionDownloaded = await downloadSessionData();
-        if (sessionDownloaded) {
-            console.log("🔒 Session downloaded, starting bot.");
-            await start();
-        } else {
-            console.log("No session found or downloaded, QR code will be printed for authentication.");
-            useQR = true;
-            await start();
-        }
-    }
-}
-
-// Routes
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-app.post('/deploy', (req, res) => {
-    const { SESSION_ID } = req.body;
-    
-    if (!SESSION_ID) {
-        return res.status(400).json({ error: 'SESSION_ID is required' });
-    }
-    
-    // Update the config with the new SESSION_ID
-    config.SESSION_ID = SESSION_ID;
-    
-    // Restart the bot initialization process
-    init()
-        .then(() => res.json({ success: true, message: 'Bot deployed successfully!' }))
-        .catch(err => {
-            console.error('Deployment error:', err);
-            res.status(500).json({ error: err.message });
+async function sendWelcomeMessage() {
+    try {
+        await Matrix.sendMessage(Matrix.user.id, {
+            text: `╭─────────────━┈⊷
+│ *BOT ONLINE* 
+╰─────────────━┈⊷
+│⏰ Time: ${new Date().toLocaleString()}
+│💻 Host: ${process.env.RENDER ? 'Render.com' : 'Local'}
+╰─────────────━┈⊷`
         });
+    } catch (error) {
+        logger.error('Welcome message error:', error);
+    }
+}
+
+// Initialize everything
+async function initialize() {
+    // Start HTTP server first
+    server.listen(PORT, () => {
+        logger.info(`Server running on port ${PORT}`);
+    });
+
+    // Then start WhatsApp connection
+    if (fs.existsSync(credsPath)) {
+        logger.info('Existing session found');
+        await startWhatsApp();
+    } else if (process.env.SESSION_ID) {
+        logger.info('Downloading session...');
+        const success = await downloadSessionData();
+        if (success) await startWhatsApp();
+    } else {
+        useQR = true;
+        await startWhatsApp();
+    }
+
+    // Keep-alive ping
+    setInterval(() => {
+        if (Matrix && Matrix.user) {
+            logger.debug('Keep-alive check: Connected');
+        } else {
+            logger.warn('Keep-alive check: Disconnected, attempting reconnect');
+            startWhatsApp();
+        }
+    }, 60000); // Check every minute
+}
+
+// Start the application
+initialize().catch(error => {
+    logger.error('Initialization failed:', error);
+    process.exit(1);
 });
 
-// Initialize the bot
-init();
-
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`Access the deployment interface at http://localhost:${PORT}`);
+// Clean exit handler
+process.on('SIGINT', () => {
+    logger.info('Shutting down gracefully...');
+    server.close();
+    process.exit(0);
 });
