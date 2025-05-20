@@ -10,31 +10,27 @@ import { fileURLToPath } from 'url';
 import { makeWASocket, fetchLatestBaileysVersion, DisconnectReason, useMultiFileAuthState, getContentType } from '@whiskeysockets/baileys';
 import { File } from 'megajs';
 
-// Fix __dirname in ES module
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Constants
+const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
-const AUTO_STATUS_REACT = process.env.AUTO_STATUS_REACT === 'true';
+
 const sessionDir = path.join(__dirname, 'session');
 const credsPath = path.join(sessionDir, 'creds.json');
+const AUTO_STATUS_REACT = true; // ON by default
 let useQR = false;
 let Matrix = null;
 
-// Express app setup
-const app = express();
-const server = http.createServer(app);
 app.use(express.json());
 app.use(express.static('public'));
 
-// Logger
 const logger = pino({
   timestamp: () => `,"time":"${new Date().toISOString()}"`,
   level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
 });
 
-// Ensure session dir exists
 async function ensureSessionDir() {
   try {
     await fs.access(sessionDir);
@@ -43,17 +39,15 @@ async function ensureSessionDir() {
   }
 }
 
-// HTML route
 app.get('/', async (req, res) => {
   try {
     const html = await fs.readFile(path.join(__dirname, 'index.html'), 'utf8');
     res.send(html);
-  } catch (e) {
-    res.status(500).send('Failed to load interface');
+  } catch {
+    res.status(500).send('Index page not found');
   }
 });
 
-// SESSION SETUP route
 app.post('/set-session', async (req, res) => {
   const { SESSION_ID } = req.body;
   if (!SESSION_ID) return res.status(400).json({ error: 'SESSION_ID is required' });
@@ -63,17 +57,16 @@ app.post('/set-session', async (req, res) => {
     const success = await downloadSessionData();
     if (success) {
       await startWhatsApp();
-      res.json({ success: true, message: 'Bot started successfully' });
+      res.json({ success: true, message: 'Bot started' });
     } else {
-      res.status(500).json({ error: 'Failed to download session' });
+      res.status(500).json({ error: 'Download failed' });
     }
   } catch (e) {
-    logger.error('Session error:', e);
+    logger.error(e);
     res.status(500).json({ error: e.message });
   }
 });
 
-// Download session from MEGA
 async function downloadSessionData() {
   try {
     const sessionPart = process.env.SESSION_ID?.split('CLOUD-AI~')[1];
@@ -89,12 +82,11 @@ async function downloadSessionData() {
     logger.info('Session downloaded');
     return true;
   } catch (e) {
-    logger.error('Download error:', e);
+    logger.error('MEGA Download failed:', e);
     return false;
   }
 }
 
-// WhatsApp startup
 async function startWhatsApp() {
   try {
     await ensureSessionDir();
@@ -106,7 +98,7 @@ async function startWhatsApp() {
       logger: pino({ level: 'silent' }),
       printQRInTerminal: useQR,
       auth: state,
-      browser: ["Cloud-AI", "Safari", "3.0"],
+      browser: ["Core-AI", "Safari", "3.0"],
       getMessage: async () => ({ conversation: "Hello" })
     });
 
@@ -128,21 +120,18 @@ async function startWhatsApp() {
 
     Matrix.ev.on('creds.update', saveCreds);
 
-    // Auto react/view status
     Matrix.ev.on('messages.upsert', async ({ messages }) => {
       const msg = messages[0];
       if (!msg?.message) return;
 
       const contentType = getContentType(msg.message);
-      msg.message = (contentType === 'ephemeralMessage')
-        ? msg.message.ephemeralMessage.message
-        : msg.message;
+      msg.message = contentType === 'ephemeralMessage' ? msg.message.ephemeralMessage.message : msg.message;
 
       if (msg.key.remoteJid === 'status@broadcast' && AUTO_STATUS_REACT) {
         try {
           await Matrix.readMessages([msg.key]);
-          const emojiList = ['💫', '💎', '🔥', '✅', '🦖', '👀', '💯', '😎'];
-          const emoji = emojiList[Math.floor(Math.random() * emojiList.length)];
+          const emojis = ['💫', '💎', '🔥', '✅', '🦖', '👀', '💯', '😎'];
+          const emoji = emojis[Math.floor(Math.random() * emojis.length)];
 
           await Matrix.sendMessage(msg.key.remoteJid, {
             react: {
@@ -151,27 +140,26 @@ async function startWhatsApp() {
             }
           });
 
-          logger.info(`Auto-reacted to status with ${emoji}`);
+          logger.info(`Reacted to status with ${emoji}`);
         } catch (e) {
-          logger.warn('Auto-react error:', e);
+          logger.warn('Reaction failed:', e);
         }
       }
     });
 
   } catch (e) {
-    logger.error('Startup error:', e);
+    logger.error('Startup failed:', e);
   }
 }
 
-// Welcome message
 async function sendWelcomeMessage() {
-  if (!Matrix?.user) return;
   try {
+    if (!Matrix?.user) return;
     await Matrix.sendMessage(Matrix.user.id, {
       text: `╭─── *BOT ONLINE* ───╮
 │ Time: ${new Date().toLocaleString()}
-│ Host: ${process.env.RENDER ? 'Render.com' : 'Local'}
-│ Auto Status React: ${AUTO_STATUS_REACT ? 'ON' : 'OFF'}
+│ Status AutoReact: ✅ ON
+│ Session Ready: ✅
 ╰────────────────────╯`
     });
   } catch (e) {
@@ -179,31 +167,24 @@ async function sendWelcomeMessage() {
   }
 }
 
-// Server start
 server.listen(PORT, async () => {
-  logger.info(`Server running on http://localhost:${PORT}`);
+  logger.info(`Server ready: http://localhost:${PORT}`);
 
   try {
     await fs.access(credsPath);
-    logger.info('Found session, starting WhatsApp...');
+    logger.info('Session found, booting...');
     await startWhatsApp();
   } catch {
     if (process.env.SESSION_ID) {
-      logger.info('Downloading session...');
       const ok = await downloadSessionData();
-      if (ok) await startWhatsApp();
-      else {
-        useQR = true;
-        await startWhatsApp();
-      }
-    } else {
-      useQR = true;
-      await startWhatsApp();
+      if (ok) return await startWhatsApp();
     }
+
+    useQR = true;
+    await startWhatsApp();
   }
 });
 
-// Graceful exit
 process.on('SIGINT', () => {
   logger.info('Shutting down...');
   server.close(() => process.exit(0));
