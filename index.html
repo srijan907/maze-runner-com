@@ -3,148 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloud AI Bot Deployment</title>
+    <title>Cloud AI Bot Setup</title>
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f0f2f5;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            color: #333;
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
         }
-        
         .container {
-            background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            padding: 30px;
-            width: 400px;
-            max-width: 90%;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        
         h1 {
-            color: #32CD32;
+            color: #4CAF50;
             text-align: center;
-            margin-bottom: 20px;
-            font-size: 24px;
         }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #555;
-        }
-        
         input[type="text"] {
             width: 100%;
-            padding: 12px;
+            padding: 10px;
+            margin: 10px 0;
             border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 16px;
+            border-radius: 4px;
             box-sizing: border-box;
-            transition: border-color 0.3s;
         }
-        
-        input[type="text"]:focus {
-            border-color: #32CD32;
-            outline: none;
-        }
-        
         button {
-            background-color: #32CD32;
+            background-color: #4CAF50;
             color: white;
             border: none;
-            padding: 12px 20px;
-            border-radius: 6px;
+            padding: 10px 15px;
+            border-radius: 4px;
             cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
             width: 100%;
-            transition: background-color 0.3s;
+            font-size: 16px;
         }
-        
         button:hover {
-            background-color: #2db82d;
+            background-color: #45a049;
         }
-        
-        .status {
+        #status {
             margin-top: 20px;
-            padding: 12px;
-            border-radius: 6px;
+            padding: 10px;
+            border-radius: 4px;
             display: none;
         }
-        
         .success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+            background-color: #dff0d8;
+            color: #3c763d;
         }
-        
         .error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        
-        .logo {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        
-        .logo img {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            object-fit: cover;
+            background-color: #f2dede;
+            color: #a94442;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="logo">
-            <img src="https://files.catbox.moe/8h0cyi.jpg" alt="Cloud AI Logo">
-        </div>
-        <h1>Cloud AI Bot Deployment</h1>
+        <h1>Cloud AI Bot Setup</h1>
+        <p>Enter your WhatsApp session ID to start the bot:</p>
         
-        <div class="form-group">
-            <label for="sessionId">Enter Your SESSION_ID:</label>
+        <div>
             <input type="text" id="sessionId" placeholder="CLOUD-AI~your_file_id#your_decryption_key">
+            <button id="deployBtn">Start Bot</button>
         </div>
         
-        <button id="deployBtn">Deploy Bot</button>
-        
-        <div id="statusMessage" class="status"></div>
+        <div id="status"></div>
     </div>
 
     <script>
         document.getElementById('deployBtn').addEventListener('click', async () => {
             const sessionId = document.getElementById('sessionId').value.trim();
-            const statusMessage = document.getElementById('statusMessage');
+            const statusEl = document.getElementById('status');
             
             if (!sessionId) {
                 showStatus('Please enter your SESSION_ID', 'error');
                 return;
             }
             
-            if (!sessionId.includes('CLOUD-AI~') || !sessionId.includes('#')) {
-                showStatus('Invalid SESSION_ID format. It must contain both file ID and decryption key.', 'error');
-                return;
-            }
-            
             try {
-                showStatus('Deploying bot... Please wait', 'success');
+                showStatus('Configuring session...', 'success');
                 
-                // Send the SESSION_ID to the server
-                const response = await fetch('/deploy', {
+                const response = await fetch('/set-session', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -155,26 +96,20 @@
                 const result = await response.json();
                 
                 if (response.ok) {
-                    showStatus('Bot deployed successfully!', 'success');
+                    showStatus('Bot started successfully!', 'success');
                 } else {
-                    showStatus(`Error: ${result.error || 'Failed to deploy bot'}`, 'error');
+                    showStatus(`Error: ${result.error || 'Failed to start bot'}`, 'error');
                 }
             } catch (error) {
-                showStatus(`Network error: ${error.message}`, 'error');
-                console.error('Deployment error:', error);
+                showStatus(`Error: ${error.message}`, 'error');
             }
         });
         
         function showStatus(message, type) {
-            const statusMessage = document.getElementById('statusMessage');
-            statusMessage.textContent = message;
-            statusMessage.className = 'status ' + type;
-            statusMessage.style.display = 'block';
-            
-            // Auto-hide after 5 seconds
-            setTimeout(() => {
-                statusMessage.style.display = 'none';
-            }, 5000);
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = type;
+            statusEl.style.display = 'block';
         }
     </script>
 </body>
