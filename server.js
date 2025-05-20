@@ -20,7 +20,6 @@ import moment from 'moment-timezone';
 import axios from 'axios';
 import config from './config.cjs';
 
-const { emojis, doReact } = pkg;
 const prefix = process.env.PREFIX || config.PREFIX;
 const sessionName = "session";
 const app = express();
