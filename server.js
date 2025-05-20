@@ -33,6 +33,45 @@ const logger = pino({
 const userSockets = new Map(); // userId -> socket
 const sessionBasePath = path.join(__dirname, 'sessions');
 
+// Serve homepage
+app.get('/', async (req, res) => {
+  try {
+    const html = await fs.readFile(path.join(__dirname, 'index.html'), 'utf8');
+    res.send(html);
+  } catch {
+    res.send('✅ Cloud AI Multi-User Bot is running.');
+  }
+});
+
+// Session setup via MEGA
+app.post('/set-session/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const { SESSION_ID } = req.body;
+
+  if (!SESSION_ID) return res.status(400).json({ error: 'SESSION_ID required' });
+
+  const success = await downloadSessionData(userId, SESSION_ID);
+  if (success) {
+    await startWhatsApp(userId, false);
+    res.json({ success: true });
+  } else {
+    res.status(500).json({ error: 'Session download failed' });
+  }
+});
+
+// QR login fallback
+app.get('/qr-login/:userId', async (req, res) => {
+  const { userId } = req.params;
+  await startWhatsApp(userId, true);
+  res.send(`QR printed in console for ${userId}`);
+});
+
+// List all connected users
+app.get('/users', (req, res) => {
+  res.json({ users: [...userSockets.keys()] });
+});
+
+// Ensure session folder exists
 async function ensureSessionPath(userId) {
   const userPath = path.join(sessionBasePath, userId);
   try {
@@ -43,6 +82,7 @@ async function ensureSessionPath(userId) {
   return userPath;
 }
 
+// Download session from MEGA
 async function downloadSessionData(userId, sessionId) {
   try {
     const part = sessionId.split("CLOUD-AI~")[1];
@@ -62,6 +102,7 @@ async function downloadSessionData(userId, sessionId) {
   }
 }
 
+// Start WhatsApp instance for user
 async function startWhatsApp(userId, useQR = false) {
   const userPath = await ensureSessionPath(userId);
   const { state, saveCreds } = await useMultiFileAuthState(userPath);
@@ -92,7 +133,7 @@ async function startWhatsApp(userId, useQR = false) {
     }
   });
 
-  // Auto-view and react to status
+  // Auto view + react to statuses
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
     if (!msg?.message || msg.key.remoteJid !== 'status@broadcast') return;
@@ -116,39 +157,12 @@ async function startWhatsApp(userId, useQR = false) {
 
       logger.info(`${userId} reacted to status with ${emoji}`);
     } catch (err) {
-      logger.warn(`${userId} status handling error:`, err);
+      logger.warn(`${userId} status react error:`, err);
     }
   });
 }
 
-// Route to provide session via MEGA
-app.post('/set-session/:userId', async (req, res) => {
-  const { userId } = req.params;
-  const { SESSION_ID } = req.body;
-
-  if (!SESSION_ID) return res.status(400).json({ error: 'SESSION_ID required' });
-
-  const success = await downloadSessionData(userId, SESSION_ID);
-  if (success) {
-    await startWhatsApp(userId, false);
-    return res.json({ success: true });
-  } else {
-    return res.status(500).json({ error: 'Session download failed' });
-  }
-});
-
-// QR fallback (for testing / manual setup)
-app.get('/qr-login/:userId', async (req, res) => {
-  const { userId } = req.params;
-  await startWhatsApp(userId, true);
-  res.send(`Scan QR for ${userId} in console`);
-});
-
-// List active users
-app.get('/users', (req, res) => {
-  res.json({ users: [...userSockets.keys()] });
-});
-
+// Launch server
 server.listen(PORT, () => {
   logger.info(`Multi-user bot running at http://localhost:${PORT}`);
 });
