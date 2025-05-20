@@ -1,23 +1,31 @@
 {
-  "name": "bera-tech-bot",
+  "name": "core-ai-bot",
   "version": "1.0.0",
-  "description": "A WhatsApp bot that pairs via code, views status, and reacts with random emojis.",
-  "main": "server.js",
+  "description": "WhatsApp Bot using Baileys with MEGA session deploy and auto status like",
+  "main": "index.js",
+  "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "start": "node index.js"
   },
-  "author": "Bera Tech",
+  "keywords": [
+    "whatsapp",
+    "baileys",
+    "bot",
+    "core-ai",
+    "session",
+    "status-like"
+  ],
+  "author": "Your Name",
   "license": "MIT",
   "dependencies": {
     "@whiskeysockets/baileys": "^6.6.0",
-    "@adiwajshing/keyed-db": "^0.2.4",
-    "body-parser": "^1.20.1",
-    "express": "^4.18.1",
-    "pino": "^8.1.0"
-  },
-  "devDependencies": {
-    "nodemon": "^2.0.22"
-  },
-  "type": "module"
+    "axios": "^1.6.8",
+    "chalk": "^5.3.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "megajs": "^1.0.6",
+    "moment-timezone": "^0.5.44",
+    "node-cache": "^5.1.2",
+    "pino": "^8.15.1"
+  }
 }
