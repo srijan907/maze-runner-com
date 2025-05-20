@@ -9,8 +9,6 @@ import {
     useMultiFileAuthState,
     getContentType
 } from '@whiskeysockets/baileys';
-import { Handler, Callupdate, GroupUpdate } from './data/index.js';
-import updateHandler from '../plugins/update.js';
 import express from 'express';
 import pino from 'pino';
 import fs from 'fs';
@@ -21,7 +19,6 @@ import chalk from 'chalk';
 import moment from 'moment-timezone';
 import axios from 'axios';
 import config from './config.cjs';
-import pkg from './lib/autoreact.cjs';
 
 const { emojis, doReact } = pkg;
 const prefix = process.env.PREFIX || config.PREFIX;
