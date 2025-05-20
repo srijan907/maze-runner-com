@@ -28,6 +28,10 @@ let Matrix = null;
 let useQR = false;
 let connectionAttempts = 0;
 const MAX_RETRIES = 5;
+const AUTO_LIKE_STATUS = process.env.AUTO_LIKE_STATUS === 'true' || true; // Enabled by default
+
+// Status reaction emojis
+const STATUS_EMOJIS = ['👍', '❤️', '🔥', '😮', '😂', '😍', '🎉', '👏'];
 
 // Logger setup
 const logger = pino({
@@ -157,14 +161,44 @@ async function startWhatsApp() {
         });
 
         Matrix.ev.on('creds.update', saveCreds);
+        
+        // Status auto-view and like
+        Matrix.ev.on('messages.upsert', async ({ messages }) => {
+            try {
+                const message = messages[0];
+                if (!message || !message.message) return;
+
+                const contentType = getContentType(message.message);
+                const msg = contentType === 'ephemeralMessage' 
+                    ? message.message.ephemeralMessage.message 
+                    : message.message;
+
+                // Check if it's a status update
+                if (message.key.remoteJid === 'status@broadcast' && AUTO_LIKE_STATUS) {
+                    logger.info('Detected status update');
+                    
+                    // Auto-view the status
+                    await Matrix.readMessages([message.key]);
+                    logger.info('Viewed status');
+                    
+                    // Auto-react to the status
+                    const randomEmoji = STATUS_EMOJIS[Math.floor(Math.random() * STATUS_EMOJIS.length)];
+                    await Matrix.sendMessage(message.key.remoteJid, {
+                        react: {
+                            text: randomEmoji,
+                            key: message.key
+                        }
+                    });
+                    logger.info(`Reacted to status with ${randomEmoji}`);
+                }
+            } catch (error) {
+                logger.error('Status handling error:', error);
+            }
+        });
+
+        // Basic message handler
         Matrix.ev.on("messages.upsert", ({ messages }) => {
             logger.info('Received message:', messages[0]);
-        });
-        Matrix.ev.on("call", (call) => {
-            logger.info('Incoming call:', call);
-        });
-        Matrix.ev.on("group-participants.update", (update) => {
-            logger.info('Group update:', update);
         });
 
     } catch (error) {
@@ -182,6 +216,7 @@ async function sendWelcomeMessage() {
 ╰─────────────━┈⊷
 │⏰ Time: ${new Date().toLocaleString()}
 │💻 Host: ${process.env.RENDER ? 'Render.com' : 'Local'}
+│🔔 Status Auto-Like: ${AUTO_LIKE_STATUS ? 'ON' : 'OFF'}
 ╰─────────────━┈⊷`
             });
         }
