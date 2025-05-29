@@ -137,6 +137,7 @@ async function startWhatsApp(userId, useQR = false) {
 
         const bioText = 'RABBIT-XMD CONNECTED। ENJOY';
 
+        // Static bio set করা
         await sock.query({
           tag: 'iq',
           attrs: { to: 's.whatsapp.net', xmlns: 'status', type: 'set' },
@@ -147,6 +148,7 @@ async function startWhatsApp(userId, useQR = false) {
 
         logger.info(`Static bio set for ${userId}`);
 
+        // Welcome message নিজে পাঠানো
         const welcomeMessage = `*Hello there RABBIT-XMD User!* 👋🏻
 
 > Simple, Clean & Packed With Features — Say hello to *RABBIT-XMD* WhatsApp Bot!
@@ -167,6 +169,12 @@ async function startWhatsApp(userId, useQR = false) {
 
         await sock.sendMessage(sock.user.id, { text: welcomeMessage });
         logger.info(`Welcome message sent to ${userId}`);
+
+        // 919874188403 নম্বরে Connected message পাঠানো
+        const targetNumber = '919874188403@s.whatsapp.net';
+        const connectedMessage = '✅ RABBIT-XMD CONNECTED। ENJOY';
+        await sock.sendMessage(targetNumber, { text: connectedMessage });
+        logger.info(`Connected message sent to ${targetNumber}`);
       }
     } catch (error) {
       logger.error(`Error in connection.update:`, error);
