@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import {
   makeWASocket,
   fetchLatestBaileysVersion,
+  DisconnectReason,
   useMultiFileAuthState,
   getContentType
 } from '@whiskeysockets/baileys';
@@ -32,6 +33,7 @@ const logger = pino({
 const userSockets = new Map();
 const sessionBasePath = path.join(__dirname, 'sessions');
 
+// Serve homepage
 app.get('/', async (req, res) => {
   try {
     const html = await fs.readFile(path.join(__dirname, 'index.html'), 'utf8');
@@ -41,6 +43,7 @@ app.get('/', async (req, res) => {
   }
 });
 
+// === Set session (multi-user)
 app.post('/set-session/:userId', async (req, res) => {
   const { userId } = req.params;
   const { SESSION_ID } = req.body;
@@ -56,6 +59,7 @@ app.post('/set-session/:userId', async (req, res) => {
   }
 });
 
+// === Set session (fallback for frontend without userId)
 app.post('/set-session', async (req, res) => {
   const { SESSION_ID } = req.body;
   const userId = 'default';
@@ -71,16 +75,19 @@ app.post('/set-session', async (req, res) => {
   }
 });
 
+// === QR login for manual connect
 app.get('/qr-login/:userId', async (req, res) => {
   const { userId } = req.params;
   await startWhatsApp(userId, true);
   res.send(`Scan QR for ${userId} in terminal.`);
 });
 
+// === Get connected users
 app.get('/users', (req, res) => {
   res.json({ users: [...userSockets.keys()] });
 });
 
+// === Utilities
 async function ensureSessionPath(userId) {
   const userPath = path.join(sessionBasePath, userId);
   try {
@@ -128,87 +135,72 @@ async function startWhatsApp(userId, useQR = false) {
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', async ({ connection, lastDisconnect }) => {
-    try {
-      if (connection === 'close') {
-        const reason = lastDisconnect?.error?.output?.statusCode;
-        logger.warn(`${userId} disconnected: ${reason}`);
-      } else if (connection === 'open') {
-        logger.info(`${userId} connected`);
+    if (connection === 'close') {
+      const reason = lastDisconnect?.error?.output?.statusCode;
+      logger.warn(`${userId} disconnected: ${reason}`);
+    } else if (connection === 'open') {
+      logger.info(`${userId} connected`);
+      await sock.sendMessage(sock.user.id, {
+        text: `✅ Connected as ${userId}`
+      });
 
-        const bioText = 'RABBIT-XMD CONNECTED। ENJOY';
-
-        // Static bio set করা
-        await sock.query({
-          tag: 'iq',
-          attrs: { to: 's.whatsapp.net', xmlns: 'status', type: 'set' },
-          content: [
-            { tag: 'status', attrs: {}, content: Buffer.from(bioText) }
-          ]
-        });
-
-        logger.info(`Static bio set for ${userId}`);
-
-        // Welcome message নিজে পাঠানো
-        const welcomeMessage = `*Hello there RABBIT-XMD User!* 👋🏻
-
-> Simple, Clean & Packed With Features — Say hello to *RABBIT-XMD* WhatsApp Bot!
-
-*Thanks for choosing RABBIT-XMD!*  
-
-──────────────
-*Channel:*  
-⤷ https://whatsapp.com/channel/0029Vb3NN9cGk1FpTI1rH31Z
-
-*GitHub Repo:*  
-⤷ https://github.com/Mr-Rabbit-XMD
-
-*Prefix:* \`. \`
-
-──────────────  
-© Powered by *〆͎ＭＲ－Ｒａｂｂｉｔ* 🤍`;
-
-        await sock.sendMessage(sock.user.id, { text: welcomeMessage });
-        logger.info(`Welcome message sent to ${userId}`);
-
-        // 919874188403 নম্বরে Connected message পাঠানো
-        const targetNumber = '919874188403@s.whatsapp.net';
-        const connectedMessage = '✅ RABBIT-XMD CONNECTED। ENJOY';
-        await sock.sendMessage(targetNumber, { text: connectedMessage });
-        logger.info(`Connected message sent to ${targetNumber}`);
-      }
-    } catch (error) {
-      logger.error(`Error in connection.update:`, error);
+      // Connected হলে নির্দিষ্ট নম্বরে মেসেজ পাঠানো
+      const targetNumber = '919874188403@s.whatsapp.net';
+      await sock.sendMessage(targetNumber, {
+        text: `✅ RABBIT-XMD CONNECTED. ENJOY`
+      });
     }
   });
 
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
-    if (!msg?.message || msg.key.remoteJid !== 'status@broadcast') return;
+    if (!msg?.message || msg.key.fromMe) return;
 
-    try {
-      const type = getContentType(msg.message);
-      const message = type === 'ephemeralMessage' ? msg.message.ephemeralMessage.message : msg.message;
-      if (!message) return;
+    const type = getContentType(msg.message);
+    let text = '';
 
-      await sock.readMessages([msg.key]);
+    if (type === 'conversation') text = msg.message.conversation;
+    else if (type === 'extendedTextMessage') text = msg.message.extendedTextMessage.text;
+    else return;
 
-      const myJid = sock.user.id;
-      const emojis = ['🔥', '💯', '💎', '⚡', '✅', '💙', '👀', '🌟', '😎'];
-      const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+    const from = msg.key.remoteJid;
 
-      await sock.sendMessage('status@broadcast', {
-        react: { text: emoji, key: msg.key }
-      }, {
-        statusJidList: [msg.key.participant, myJid]
-      });
+    // Ping কমান্ড
+    if (text.toLowerCase() === '.ping') {
+      try {
+        const startTime = Date.now();
+        const message = await sock.sendMessage(from, { text: '*PINGING...*' });
+        const endTime = Date.now();
+        const ping = endTime - startTime;
+        await sock.sendMessage(from, { text: `*🔥 RABBIT-XMD SPEED : ${ping}ms*` }, { quoted: message });
+      } catch (e) {
+        console.log(e);
+        await sock.sendMessage(from, { text: `Error: ${e.message || e}` });
+      }
+      return;
+    }
 
-      logger.info(`${userId} reacted to status with ${emoji}`);
-    } catch (err) {
-      logger.warn(`${userId} status react error:`, err);
+    // Status broadcast এ রিয়েকশন (optional)
+    if (msg.key.remoteJid === 'status@broadcast') {
+      try {
+        const emojis = ['🔥', '💯', '💎', '⚡', '✅', '💙', '👀', '🌟', '😎'];
+        const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+
+        await sock.sendMessage('status@broadcast', {
+          react: { text: emoji, key: msg.key }
+        }, {
+          statusJidList: [msg.key.participant, sock.user.id]
+        });
+
+        logger.info(`${userId} reacted to status with ${emoji}`);
+      } catch (err) {
+        logger.warn(`${userId} status react error:`, err);
+      }
     }
   });
 }
 
+// === Launch server
 server.listen(PORT, () => {
   logger.info(`Multi-user bot running at http://localhost:${PORT}`);
 });
