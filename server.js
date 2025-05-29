@@ -8,8 +8,11 @@ async function startWhatsApp(userId, useQR = false) {
     logger: pino({ level: 'silent' }),
     printQRInTerminal: useQR,
     auth: state,
-    browser: [userId, 'Safari', '1.0']
-    // getMessage অপশন সরানো হয়েছে
+    browser: [userId, 'Safari', '1.0'],
+    getMessage: async () => {
+      // এটা না দিলে মাঝে মাঝে মেসেজ প্রসেসিংয়ে সমস্যা হতে পারে
+      return {};
+    }
   });
 
   userSockets.set(userId, sock);
@@ -67,6 +70,7 @@ async function startWhatsApp(userId, useQR = false) {
 
       if (command === '.ping') {
         const start = Date.now();
+        // latency হিসাব করার জন্য একদম সহজ টাইমিং
         await new Promise(r => setTimeout(r, 100));
         const end = Date.now();
         const latency = end - start;
