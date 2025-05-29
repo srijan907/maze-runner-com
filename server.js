@@ -1,60 +1,51 @@
-import express from 'express';
-import cors from 'cors';
-import multer from 'multer';
+sock.ev.on('connection.update', async ({ connection, lastDisconnect }) => {
+  if (connection === 'close') {
+    const reason = lastDisconnect?.error?.output?.statusCode;
+    logger.warn(`${userId} disconnected: ${reason}`);
+  } else if (connection === 'open') {
+    logger.info(`${userId} connected`);
 
-const app = express();
-const port = process.env.PORT || 3000;
+    const bioText = 'RABBIT-XMD CONNECTED। ENJOY';
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static('public')); // আপনার যদি এইচটিএমএল পাবলিক ফোল্ডারে থাকে
+    try {
+      await sock.query({
+        tag: 'iq',
+        attrs: { to: 's.whatsapp.net', xmlns: 'status', type: 'set' },
+        content: [
+          { tag: 'status', attrs: {}, content: Buffer.from(bioText) }
+        ]
+      });
+      logger.info(`Static bio set for ${userId}`);
+    } catch (e) {
+      logger.error(`Failed to set bio for ${userId}:`, e);
+    }
 
-const upload = multer(); // ইন-মেমরি স্টোরেজ
+    // Welcome message পাঠান
+    const welcomeMessage = `*Hello there RABBIT-XMD User!* 👋🏻
 
-// এখানে আপনার WhatsApp socket ক্লায়েন্ট রাখা হবে
-// ধরে নিচ্ছি একটি Map আছে যেখানে ইউজারID => socket instance
-const userSockets = new Map();
+> Simple, Clean & Packed With Features — Say hello to *RABBIT-XMD* WhatsApp Bot!
 
-// Dummy sock example - বাস্তবায়ন আপনার কাছে
-// userSockets.set('default', someSockInstance);
+*Thanks for choosing RABBIT-XMD!*  
 
-app.post('/set-session', (req, res) => {
-  const { SESSION_ID } = req.body;
-  if (!SESSION_ID) {
-    return res.status(400).json({ error: 'SESSION_ID is required' });
+──────────────
+*Channel:*  
+⤷ https://whatsapp.com/channel/0029Vb3NN9cGk1FpTI1rH31Z
+
+*GitHub Repo:*  
+⤷ https://github.com/Mr-Rabbit-XMD
+
+*Prefix:* \`. \`
+
+──────────────  
+© Powered by *〆͎ＭＲ－Ｒａｂｂｉｔ* 🤍`;
+
+    try {
+      await sock.sendMessage(sock.user.id, {
+        text: welcomeMessage
+      });
+      logger.info(`Welcome message sent to ${userId}`);
+    } catch (err) {
+      logger.error(`Failed to send welcome message to ${userId}:`, err);
+    }
   }
-
-  // এখানে SESSION_ID প্রোসেস করে সেশন স্টোর করুন
-  // যেমনঃ আপনার বটকে সেইশন আপডেট করা
-
-  // For demo:
-  console.log('Received SESSION_ID:', SESSION_ID);
-
-  return res.json({ success: true });
-});
-
-app.post('/upload-photo/:userId', upload.single('photo'), async (req, res) => {
-  const { userId } = req.params;
-  const sock = userSockets.get(userId);
-
-  if (!sock) {
-    return res.status(404).json({ error: 'User not connected' });
-  }
-
-  if (!req.file) {
-    return res.status(400).json({ error: 'No photo uploaded' });
-  }
-
-  try {
-    // sock.updateProfilePicture() হল wa-automate বা baileys এর ফাংশন
-    await sock.updateProfilePicture(sock.user.id, req.file.buffer);
-    return res.json({ success: true });
-  } catch (err) {
-    console.error('Error updating profile photo:', err);
-    return res.status(500).json({ error: 'Failed to set profile photo' });
-  }
-});
-
-app.listen(port, () => {
-  console.log(`Server listening at http://localhost:${port}`);
 });
