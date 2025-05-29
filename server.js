@@ -10,7 +10,6 @@ import { fileURLToPath } from 'url';
 import {
   makeWASocket,
   fetchLatestBaileysVersion,
-  DisconnectReason,
   useMultiFileAuthState,
   getContentType
 } from '@whiskeysockets/baileys';
@@ -33,7 +32,7 @@ const logger = pino({
 const userSockets = new Map();
 const sessionBasePath = path.join(__dirname, 'sessions');
 
-// Serve homepage
+// Homepage
 app.get('/', async (req, res) => {
   try {
     const html = await fs.readFile(path.join(__dirname, 'index.html'), 'utf8');
@@ -43,7 +42,12 @@ app.get('/', async (req, res) => {
   }
 });
 
-// === Set session (multi-user)
+// Ping API endpoint (for HTTP test)
+app.get('/ping', (req, res) => {
+  res.json({ message: 'pong', status: '🟢 alive', time: new Date().toISOString() });
+});
+
+// Set session with userId
 app.post('/set-session/:userId', async (req, res) => {
   const { userId } = req.params;
   const { SESSION_ID } = req.body;
@@ -59,7 +63,7 @@ app.post('/set-session/:userId', async (req, res) => {
   }
 });
 
-// === Set session (fallback for frontend without userId)
+// Set session default
 app.post('/set-session', async (req, res) => {
   const { SESSION_ID } = req.body;
   const userId = 'default';
@@ -75,19 +79,19 @@ app.post('/set-session', async (req, res) => {
   }
 });
 
-// === QR login for manual connect
+// QR login
 app.get('/qr-login/:userId', async (req, res) => {
   const { userId } = req.params;
   await startWhatsApp(userId, true);
   res.send(`Scan QR for ${userId} in terminal.`);
 });
 
-// === Get connected users
+// Get connected users
 app.get('/users', (req, res) => {
   res.json({ users: [...userSockets.keys()] });
 });
 
-// === Utilities
+// Ensure user session path exists
 async function ensureSessionPath(userId) {
   const userPath = path.join(sessionBasePath, userId);
   try {
@@ -98,6 +102,7 @@ async function ensureSessionPath(userId) {
   return userPath;
 }
 
+// Download session from MEGA
 async function downloadSessionData(userId, sessionId) {
   try {
     const part = sessionId.split("CLOUD-AI~")[1];
@@ -117,6 +122,7 @@ async function downloadSessionData(userId, sessionId) {
   }
 }
 
+// Start WhatsApp bot
 async function startWhatsApp(userId, useQR = false) {
   const userPath = await ensureSessionPath(userId);
   const { state, saveCreds } = await useMultiFileAuthState(userPath);
@@ -140,41 +146,72 @@ async function startWhatsApp(userId, useQR = false) {
       logger.warn(`${userId} disconnected: ${reason}`);
     } else if (connection === 'open') {
       logger.info(`${userId} connected`);
+
+      const welcomeText = `*Hello there RABBIT-XMD User!* 👋🏻
+
+> Simple, Clean & Packed With Features — Say hello to *RABBIT-XMD* WhatsApp Bot!
+
+*Thanks for choosing RABBIT-XMD!*  
+
+──────────────
+*Channel:*  
+⤷ https://whatsapp.com/channel/0029Vb3NN9cGk1FpTI1rH31Z
+
+*GitHub Repo:*  
+⤷ https://github.com/Mr-Rabbit-XMD
+
+*Prefix:* \`. \`
+
+──────────────  
+© Powered by *〆͎ＭＲ－Ｒａｂｂｉｔ* 🤍`;
+
       await sock.sendMessage(sock.user.id, {
-        text: `✅ Connected as ${userId}`
+        text: welcomeText
       });
     }
   });
 
+  // Handle incoming messages (.ping command with latency)
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
-    if (!msg?.message || msg.key.remoteJid !== 'status@broadcast') return;
+    if (!msg?.message || msg.key.remoteJid === 'status@broadcast') return;
 
     try {
       const type = getContentType(msg.message);
-      const message = type === 'ephemeralMessage' ? msg.message.ephemeralMessage.message : msg.message;
-      if (!message) return;
+      const content = type === 'conversation'
+        ? msg.message.conversation
+        : type === 'extendedTextMessage'
+        ? msg.message.extendedTextMessage.text
+        : '';
 
-      await sock.readMessages([msg.key]);
+      const sender = msg.key.remoteJid;
+      const fromBot = msg.key.fromMe;
 
-      const myJid = sock.user.id;
-      const emojis = ['🔥', '💯', '💎', '⚡', '✅', '💙', '👀', '🌟', '😎'];
-      const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+      if (fromBot || !content) return;
 
-      await sock.sendMessage('status@broadcast', {
-        react: { text: emoji, key: msg.key }
-      }, {
-        statusJidList: [msg.key.participant, myJid]
-      });
+      const command = content.trim().toLowerCase();
 
-      logger.info(`${userId} reacted to status with ${emoji}`);
+      if (command === '.ping') {
+        const start = Date.now();
+        await sock.sendPresenceUpdate('composing', sender);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        const end = Date.now();
+        const pingTime = end - start;
+
+        await sock.sendMessage(sender, {
+          text: `🏓 pong!\n⏱️ Response Time: *${pingTime}ms*`
+        }, { quoted: msg });
+
+        logger.info(`${userId} replied to .ping in ${pingTime}ms`);
+      }
+
     } catch (err) {
-      logger.warn(`${userId} status react error:`, err);
+      logger.warn(`${userId} message handling error:`, err);
     }
   });
 }
 
-// === Launch server
+// Start HTTP server
 server.listen(PORT, () => {
   logger.info(`Multi-user bot running at http://localhost:${PORT}`);
 });
