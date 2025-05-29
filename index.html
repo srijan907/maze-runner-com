@@ -1,332 +1,299 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cloud AI | WhatsApp Bot</title>
-    <style>
-        :root {
-            --neon-pink: #ff2a6d;
-            --neon-blue: #05d9e8;
-            --neon-purple: #d300c5;
-            --neon-green: #00ff9d;
-            --dark-bg: #0d0221;
-        }
-        body {
-            background-color: var(--dark-bg);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: white;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-image:
-                radial-gradient(circle at 10% 20%, rgba(255, 42, 109, 0.1) 0%, transparent 20%),
-                radial-gradient(circle at 90% 80%, rgba(5, 217, 232, 0.1) 0%, transparent 20%);
-            overflow-x: hidden;
-        }
-        .container {
-            background: rgba(13, 2, 33, 0.8);
-            border: 1px solid var(--neon-blue);
-            border-radius: 15px;
-            box-shadow:
-                0 0 15px var(--neon-pink),
-                0 0 30px rgba(255, 42, 109, 0.3);
-            padding: 30px;
-            width: 90%;
-            max-width: 500px;
-            position: relative;
-            overflow: hidden;
-        }
-        .container::before {
-            content: '';
-            position: absolute;
-            top: -2px;
-            left: -2px;
-            right: -2px;
-            bottom: -2px;
-            border-radius: 15px;
-            background: linear-gradient(45deg,
-                var(--neon-pink),
-                var(--neon-blue),
-                var(--neon-purple));
-            z-index: -1;
-            animation: borderGlow 3s linear infinite;
-        }
-        @keyframes borderGlow {
-            0% { filter: blur(5px); opacity: 0.7; }
-            50% { filter: blur(7px); opacity: 1; }
-            100% { filter: blur(5px); opacity: 0.7; }
-        }
-        h1 {
-            color: var(--neon-green);
-            text-align: center;
-            margin-bottom: 25px;
-            font-size: 2.2rem;
-            text-shadow: 0 0 10px var(--neon-green);
-        }
-        .logo {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .logo img {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 2px solid var(--neon-blue);
-            box-shadow: 0 0 15px var(--neon-blue);
-        }
-        .instructions {
-            background: rgba(0, 0, 0, 0.3);
-            border-left: 3px solid var(--neon-purple);
-            padding: 15px;
-            margin-bottom: 25px;
-            border-radius: 0 8px 8px 0;
-        }
-        .instructions ol {
-            padding-left: 20px;
-            margin: 10px 0;
-        }
-        .instructions li {
-            margin-bottom: 10px;
-            line-height: 1.5;
-        }
-        .pair-link {
-            display: block;
-            background: rgba(5, 217, 232, 0.1);
-            color: var(--neon-blue);
-            text-align: center;
-            padding: 12px;
-            border-radius: 8px;
-            margin: 20px 0;
-            text-decoration: none;
-            border: 1px solid var(--neon-blue);
-            transition: all 0.3s ease;
-            font-weight: bold;
-        }
-        .pair-link:hover {
-            background: rgba(5, 217, 232, 0.2);
-            box-shadow: 0 0 15px var(--neon-blue);
-            transform: translateY(-2px);
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: var(--neon-pink);
-            font-weight: bold;
-        }
-        input[type="text"], input[type="file"] {
-            width: 100%;
-            padding: 12px 15px;
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid var(--neon-purple);
-            border-radius: 8px;
-            color: white;
-            font-size: 16px;
-            transition: all 0.3s ease;
-        }
-        input[type="text"]:focus, input[type="file"]:focus {
-            outline: none;
-            border-color: var(--neon-green);
-            box-shadow: 0 0 10px var(--neon-green);
-        }
-        button {
-            width: 100%;
-            padding: 14px;
-            background: linear-gradient(45deg, var(--neon-pink), var(--neon-purple));
-            border: none;
-            border-radius: 8px;
-            color: white;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-top: 10px;
-        }
-        button:hover {
-            background: linear-gradient(45deg, var(--neon-purple), var(--neon-pink));
-            box-shadow: 0 0 20px var(--neon-pink);
-            transform: translateY(-2px);
-        }
-        #status, #photoStatus {
-            margin-top: 20px;
-            padding: 12px;
-            border-radius: 8px;
-            display: none;
-            text-align: center;
-            font-weight: bold;
-        }
-        .success {
-            background: rgba(0, 255, 157, 0.1);
-            border: 1px solid var(--neon-green);
-            color: var(--neon-green);
-            display: block;
-        }
-        .error {
-            background: rgba(255, 42, 109, 0.1);
-            border: 1px solid var(--neon-pink);
-            color: var(--neon-pink);
-            display: block;
-        }
-        .neon-text {
-            text-shadow: 0 0 5px currentColor;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 30px;
-            font-size: 0.9rem;
-            color: rgba(255, 255, 255, 0.6);
-        }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud AI | WhatsApp Bot</title>
+    <style>
+        :root {
+            --neon-pink: #ff2a6d;
+            --neon-blue: #05d9e8;
+            --neon-purple: #d300c5;
+            --neon-green: #00ff9d;
+            --dark-bg: #0d0221;
+        }
+        
+        body {
+            background-color: var(--dark-bg);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(255, 42, 109, 0.1) 0%, transparent 20%),
+                radial-gradient(circle at 90% 80%, rgba(5, 217, 232, 0.1) 0%, transparent 20%);
+            overflow-x: hidden;
+        }
+
+        .container {
+            background: rgba(13, 2, 33, 0.8);
+            border: 1px solid var(--neon-blue);
+            border-radius: 15px;
+            box-shadow: 
+                0 0 15px var(--neon-pink),
+                0 0 30px rgba(255, 42, 109, 0.3);
+            padding: 30px;
+            width: 90%;
+            max-width: 500px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            border-radius: 15px;
+            background: linear-gradient(45deg, 
+                var(--neon-pink), 
+                var(--neon-blue), 
+                var(--neon-purple));
+            z-index: -1;
+            animation: borderGlow 3s linear infinite;
+        }
+
+        @keyframes borderGlow {
+            0% { filter: blur(5px); opacity: 0.7; }
+            50% { filter: blur(7px); opacity: 1; }
+            100% { filter: blur(5px); opacity: 0.7; }
+        }
+
+        h1 {
+            color: var(--neon-green);
+            text-align: center;
+            margin-bottom: 25px;
+            font-size: 2.2rem;
+            text-shadow: 0 0 10px var(--neon-green);
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .logo img {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--neon-blue);
+            box-shadow: 0 0 15px var(--neon-blue);
+        }
+
+        .instructions {
+            background: rgba(0, 0, 0, 0.3);
+            border-left: 3px solid var(--neon-purple);
+            padding: 15px;
+            margin-bottom: 25px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .instructions ol {
+            padding-left: 20px;
+            margin: 10px 0;
+        }
+
+        .instructions li {
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+
+        .pair-link {
+            display: block;
+            background: rgba(5, 217, 232, 0.1);
+            color: var(--neon-blue);
+            text-align: center;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-decoration: none;
+            border: 1px solid var(--neon-blue);
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+
+        .pair-link:hover {
+            background: rgba(5, 217, 232, 0.2);
+            box-shadow: 0 0 15px var(--neon-blue);
+            transform: translateY(-2px);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--neon-pink);
+            font-weight: bold;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--neon-purple);
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--neon-green);
+            box-shadow: 0 0 10px var(--neon-green);
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(45deg, var(--neon-pink), var(--neon-purple));
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background: linear-gradient(45deg, var(--neon-purple), var(--neon-pink));
+            box-shadow: 0 0 20px var(--neon-pink);
+            transform: translateY(-2px);
+        }
+
+        #status {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 8px;
+            display: none;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .success {
+            background: rgba(0, 255, 157, 0.1);
+            border: 1px solid var(--neon-green);
+            color: var(--neon-green);
+        }
+
+        .error {
+            background: rgba(255, 42, 109, 0.1);
+            border: 1px solid var(--neon-pink);
+            color: var(--neon-pink);
+        }
+
+        .neon-text {
+            text-shadow: 0 0 5px currentColor;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <div class="logo">
-            <img src="https://files.catbox.moe/8h0cyi.jpg" alt="Cloud AI Logo" />
-        </div>
-        <h1 class="neon-text">CLOUD AI <span style="color: var(--neon-blue)">WHATSAPP BOT</span></h1>
+    <div class="container">
+        <div class="logo">
+            <img src="https://files.catbox.moe/8h0cyi.jpg" alt="Cloud AI Logo">
+        </div>
+        
+        <h1 class="neon-text">CLOUD AI <span style="color: var(--neon-blue)">WHATSAPP BOT</span></h1>
+        
+        <div class="instructions">
+            <p><strong>Follow these steps to deploy your bot:</strong></p>
+            <ol>
+                <li>Click the link below to pair your WhatsApp account</li>
+                <li>After pairing, you'll receive your <strong>Session ID</strong></li>
+                <li>Copy the Session ID and paste it below</li>
+                <li>Click <strong>DEPLOY BOT</strong> to activate</li>
+            </ol>
+        </div>
+        
+        <a href="https://cloud-tech-tces.onrender.com" target="_blank" class="pair-link neon-text">
+            🔗 CLICK HERE TO GET YOUR SESSION ID
+        </a>
+        
+        <div class="form-group">
+            <label for="sessionId">PASTE YOUR SESSION ID HERE:</label>
+            <input type="text" id="sessionId" placeholder="CLOUD-AI~your_file_id#your_decryption_key">
+        </div>
+        
+        <button id="deployBtn">⚡ DEPLOY BOT ⚡</button>
+        
+        <div id="status"></div>
+        
+        <div class="footer">
+            <p>Need help? Contact support@cloudai.com</p>
+        </div>
+    </div>
 
-        <div class="instructions">
-            <p><strong>Follow these steps to deploy your bot:</strong></p>
-            <ol>
-                <li>Click the link below to pair your WhatsApp account</li>
-                <li>After pairing, you'll receive your <strong>Session ID</strong></li>
-                <li>Copy the Session ID and paste it below</li>
-                <li>Click <strong>DEPLOY BOT</strong> to activate</li>
-            </ol>
-        </div>
-
-        <a href="https://cloud-tech-tces.onrender.com" target="_blank" class="pair-link neon-text">
-            🔗 CLICK HERE TO GET YOUR SESSION ID
-        </a>
-
-        <div class="form-group">
-            <label for="sessionId">PASTE YOUR SESSION ID HERE:</label>
-            <input type="text" id="sessionId" placeholder="CLOUD-AI~your_file_id#your_decryption_key" />
-        </div>
-
-        <button id="deployBtn">⚡ DEPLOY BOT ⚡</button>
-
-        <div id="status"></div>
-
-        <hr style="margin: 30px 0; border-color: var(--neon-purple);" />
-
-        <div class="form-group">
-            <label for="userId">Enter User ID (for profile photo):</label>
-            <input type="text" id="userId" placeholder="Enter user ID, e.g. default" />
-        </div>
-
-        <div class="form-group">
-            <label for="profilePhoto">Upload Profile Photo:</label>
-            <input type="file" id="profilePhoto" accept="image/*" />
-        </div>
-
-        <button id="uploadPhotoBtn">📸 UPLOAD PROFILE PHOTO</button>
-
-        <div id="photoStatus"></div>
-
-        <div class="footer">
-            <p>Need help? Contact support@cloudai.com</p>
-        </div>
-    </div>
-
-    <script>
-        function showStatus(elId, message, type) {
-            const el = document.getElementById(elId);
-            el.textContent = message;
-            el.className = type;
-            el.style.display = 'block';
-
-            setTimeout(() => {
-                el.style.display = 'none';
-            }, 5000);
-        }
-
-        document.getElementById('deployBtn').addEventListener('click', async () => {
-            const sessionId = document.getElementById('sessionId').value.trim();
-
-            if (!sessionId) {
-                showStatus('status', 'Please enter your Session ID', 'error');
-                return;
-            }
-            if (!sessionId.includes('CLOUD-AI~') || !sessionId.includes('#')) {
-                showStatus('status', 'Invalid Session ID format. Must contain both file ID and decryption key.', 'error');
-                return;
-            }
-            try {
-                showStatus('status', 'Deploying your bot...', 'success');
-                const response = await fetch('/set-session', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ SESSION_ID: sessionId }),
-                });
-                const result = await response.json();
-                if (response.ok && result.success) {
-                    showStatus('status', 'Bot deployed successfully!', 'success');
-                } else {
-                    showStatus('status', `Failed to deploy bot: ${result.error || 'Unknown error'}`, 'error');
-                }
-            } catch (error) {
-                showStatus('status', `Network error: ${error.message}`, 'error');
-            }
-        });
-
-        document.getElementById('uploadPhotoBtn').addEventListener('click', async () => {
-            const userId = document.getElementById('userId').value.trim();
-            const fileInput = document.getElementById('profilePhoto');
-            const photoStatus = document.getElementById('photoStatus');
-
-            if (!userId) {
-                photoStatus.textContent = 'Please enter a User ID.';
-                photoStatus.className = 'error';
-                photoStatus.style.display = 'block';
-                return;
-            }
-            if (!fileInput.files.length) {
-                photoStatus.textContent = 'Please select a photo to upload.';
-                photoStatus.className = 'error';
-                photoStatus.style.display = 'block';
-                return;
-            }
-
-            const file = fileInput.files[0];
-            const formData = new FormData();
-            formData.append('photo', file);
-
-            photoStatus.textContent = 'Uploading photo...';
-            photoStatus.className = 'success';
-            photoStatus.style.display = 'block';
-
-            try {
-                const response = await fetch(`/upload-photo/${encodeURIComponent(userId)}`, {
-                    method: 'POST',
-                    body: formData,
-                });
-
-                const result = await response.json();
-
-                if (response.ok && result.success) {
-                    photoStatus.textContent = 'Profile photo uploaded and set successfully!';
-                    photoStatus.className = 'success';
-                } else {
-                    photoStatus.textContent = `Upload failed: ${result.error || 'Unknown error'}`;
-                    photoStatus.className = 'error';
-                }
-            } catch (error) {
-                photoStatus.textContent = `Network error: ${error.message}`;
-                photoStatus.className = 'error';
-            }
-        });
-    </script>
+    <script>
+        document.getElementById('deployBtn').addEventListener('click', async () => {
+            const sessionId = document.getElementById('sessionId').value.trim();
+            const statusEl = document.getElementById('status');
+            
+            if (!sessionId) {
+                showStatus('Please enter your Session ID', 'error');
+                return;
+            }
+            
+            if (!sessionId.includes('CLOUD-AI~') || !sessionId.includes('#')) {
+                showStatus('Invalid Session ID format. Must contain both file ID and decryption key.', 'error');
+                return;
+            }
+            
+            try {
+                showStatus('Deploying your bot...', 'success');
+                
+                const response = await fetch('/set-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ SESSION_ID: sessionId })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showStatus('Bot deployed successfully!', 'success');
+                } else {
+                    showStatus(`Error: ${result.error || 'Failed to deploy bot'}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`Network error: ${error.message}`, 'error');
+                console.error('Deployment error:', error);
+            }
+        });
+        
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = type;
+            statusEl.style.display = 'block';
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 5000);
+        }
+    </script>
 </body>
 </html>
