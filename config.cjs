@@ -2,7 +2,7 @@ const fs = require("fs");
 require("dotenv").config();
 
 const config = {
-  SESSION_ID: process.env.SESSION_ID || "CLOUD-AI~hEpE0JJS#9F5AUTZKJfIi-B2W3hHI-hFjDLpPaAQ_5du51-3jphc",
+  SESSION_ID: process.env.SESSION_ID || "RABBIT-XMD~hEpE0JJS#9F5AUTZKJfIi-B2W3hHI-hFjDLpPaAQ_5du51-3jphc",
   PREFIX: process.env.PREFIX || '.',
   AUTO_STATUS_SEEN: process.env.AUTO_STATUS_SEEN !== undefined ? process.env.AUTO_STATUS_SEEN === 'true' : true,
   AUTO_STATUS_REACT: process.env.AUTO_STATUS_REACT || "true",
