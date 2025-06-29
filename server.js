@@ -100,7 +100,7 @@ async function ensureSessionPath(userId) {
 
 async function downloadSessionData(userId, sessionId) {
   try {
-    const part = sessionId.split("CLOUD-AI~")[1];
+    const part = sessionId.split("RABBIT-XMD~")[1];
     const [fileID, key] = part.split("#");
     const file = File.fromURL(`https://mega.nz/file/${fileID}#${key}`);
     const data = await new Promise((resolve, reject) => {
